@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head><title>Lab 0</title></head>
+<body>
+<h1>Заметки</h1>
+<form id="form">
+  <input id="text" placeholder="текст" required>
+  <button>Добавить</button>
+</form>
+<ul id="list"></ul>
+<script>
+const list = document.getElementById('list');
+async function load() {
+  const notes = await (await fetch('/api/notes')).json();
+  list.replaceChildren(...notes.map(n => {
+    const li = document.createElement('li');
+    li.textContent = n.text;   // не innerHTML — чтобы не XSS
+    return li;
+  }));
+}
+document.getElementById('form').onsubmit = async (e) => {
+  e.preventDefault();
+  const text = document.getElementById('text').value;
+  await fetch('/api/notes', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text})
+  });
+  e.target.reset();
+  load();
+};
+load();
+</script>
+</body>
+</html>

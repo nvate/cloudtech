@@ -1,0 +1,33 @@
+=== 1. HTTP -> HTTPS redirect ===
+HTTP/1.1 301 Moved Permanently
+Location: https://site-a.local/
+
+=== 2. Round-robin between two backends (6 requests) ===
+
+=== 3. Failover: stop backend-5001, then press Enter ===
+status=200
+status=200
+status=200
+status=200
+status=200
+status=200
+
+=== 4. /admin without credentials (expect 401) ===
+401
+
+=== 5. /admin with credentials (expect 200) ===
+200
+
+=== 6. Rate limit on /api (expect 429 under flood) ===
+     30 200
+
+=== 7. Virtual hosts: site-b does not serve site-a ===
+site-b root:  200
+site-b /docs: 404
+
+=== 8. Custom 404 (expect 404 + custom body) ===
+status: 404
+custom page: NOT FOUND
+
+=== 9. site-b /admin is protected by nothing (expect 404) ===
+404

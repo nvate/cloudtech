@@ -10,5 +10,21 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/htpasswd:/etc/nginx/htpasswd:ro
+      - ./static:/usr/share/nginx/html:ro
+      - ./docs:/var/www/docs:ro
+      - ./site-b:/var/www/site-b:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   mysql_data:

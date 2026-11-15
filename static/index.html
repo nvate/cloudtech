@@ -1,36 +1,424 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
+<head>
 <meta charset="utf-8">
-<head><title>Lab 0</title></head>
-<body>
-<h1>Заметки</h1>
-<form id="form">
-  <input id="text" placeholder="текст" required>
-  <button>Добавить</button>
-</form>
-<ul id="list"></ul>
-<script>
-const list = document.getElementById('list');
-async function load() {
-  const notes = await (await fetch('/api/notes')).json();
-  list.replaceChildren(...notes.map(n => {
-    const li = document.createElement('li');
-    li.textContent = n.text;   // не innerHTML — чтобы не XSS
-    return li;
-  }));
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Таро Штирлица</title>
+<style>
+:root{
+  --bg1:#0b0a1a; --bg2:#1a1038; --gold:#e3c070; --gold-dim:#a98b45;
+  --ink:#f3ead4; --muted:#9c94b8;
+  --cw:clamp(78px, 17vw, 124px);
+  --ch:calc(var(--cw) * 1.7);
 }
-document.getElementById('form').onsubmit = async (e) => {
-  e.preventDefault();
-  const text = document.getElementById('text').value;
-  await fetch('/api/notes', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({text})
+*{box-sizing:border-box}
+html{background:#0b0a1a}
+html,body{margin:0;min-height:100%}
+body{
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  color:var(--ink);
+  background:
+    radial-gradient(ellipse at 50% -10%, #3a1f6e 0%, transparent 55%),
+    radial-gradient(ellipse at 90% 100%, #14305a 0%, transparent 50%),
+    linear-gradient(180deg, var(--bg2), var(--bg1));
+  background-attachment:fixed;
+  overflow-x:hidden;
+}
+#stars{position:fixed;inset:0;pointer-events:none;z-index:0}
+#stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:.5;
+  animation:tw 4s ease-in-out infinite}
+@keyframes tw{0%,100%{opacity:.15}50%{opacity:.85}}
+
+main{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:36px 16px 64px;text-align:center}
+h1{font-weight:400;font-size:clamp(28px,6vw,48px);letter-spacing:.08em;margin:0;color:var(--gold);
+  text-shadow:0 0 28px rgba(227,192,112,.35)}
+.sub{color:var(--muted);margin:8px 0 0;font-style:italic;font-size:clamp(14px,2.6vw,18px)}
+.orn{color:var(--gold-dim);letter-spacing:.6em;margin:14px 0 0;font-size:14px}
+
+/* ---------- стол ---------- */
+#table{transition:height .6s;position:relative;height:calc(var(--ch) * (1.55 + (var(--rows,1) - 1) * .42));margin:28px auto 0;max-width:900px}
+.card{
+  position:absolute;left:50%;top:calc(var(--ch) * .15);
+  width:var(--cw);height:var(--ch);margin-left:calc(var(--cw) / -2);
+  perspective:900px;cursor:default;
+  transition:transform .7s cubic-bezier(.2,.8,.2,1), opacity .5s;
+  transform:translate(var(--x,0px),var(--y,0px)) rotate(var(--a,0deg)) translateY(var(--lift,0px));
+  will-change:transform;
+}
+#table.fan .card{cursor:pointer}
+#table.fan .card:hover{--lift:-26px;z-index:1000 !important}
+.inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform 1s cubic-bezier(.3,.7,.2,1)}
+.face,.back{position:absolute;inset:0;border-radius:10px;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  box-shadow:0 6px 18px rgba(0,0,0,.55), 0 0 0 1px rgba(227,192,112,.35)}
+.back{
+  background:
+    radial-gradient(circle at 50% 50%, rgba(227,192,112,.28) 0 7%, transparent 8%),
+    repeating-conic-gradient(from 0deg at 50% 50%, rgba(227,192,112,.18) 0 6deg, transparent 6deg 12deg),
+    linear-gradient(160deg,#2a1a5e,#150c34);
+  border:3px solid #130b2c; outline:1px solid var(--gold-dim); outline-offset:-8px;
+}
+.back::after{content:"☾";position:absolute;inset:0;display:grid;place-items:center;color:var(--gold);
+  font-size:calc(var(--cw) * .42);text-shadow:0 0 14px rgba(227,192,112,.6);font-variant-emoji:text}
+.face{
+  transform:rotateY(180deg);
+  background:linear-gradient(170deg,#f6ecd2,#dcc89a);color:#2a1a3a;
+  border:3px solid #130b2c;outline:1px solid #8c6d2c;outline-offset:-7px;
+  display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  padding:calc(var(--cw) * .14) 6px;
+}
+.face .num{font-size:calc(var(--cw) * .13);letter-spacing:.2em;color:#7a5b22}
+.face .sym{font-size:calc(var(--cw) * .6);line-height:1;color:#3b1f6b;font-variant-emoji:text;
+  filter:drop-shadow(0 2px 0 rgba(255,255,255,.5))}
+.face .name{font-size:calc(var(--cw) * .092);text-transform:uppercase;letter-spacing:.05em;text-align:center;line-height:1.2;max-width:100%;overflow-wrap:anywhere}
+
+/* колода в стопке */
+#table.stack .card{pointer-events:none}
+#table.stack .card:not(:last-child) .back{box-shadow:0 0 0 1px rgba(227,192,112,.25)}
+#table.shuffling .card{pointer-events:none}
+
+/* выбранная карта */
+.card.picked{z-index:2000;--lift:0px;
+  transform:translate(0,calc(var(--ch) * .12)) rotate(0deg) scale(1.3) !important;cursor:default}
+.card.picked .inner{transform:rotateY(180deg)}
+.card.gone{opacity:0;pointer-events:none;
+  transform:translate(var(--x),calc(var(--y) + 80px)) rotate(var(--a)) !important}
+
+/* ---------- кнопки ---------- */
+.btns{margin-top:12px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+button{
+  font:inherit;font-size:16px;letter-spacing:.06em;color:var(--bg1);cursor:pointer;
+  background:linear-gradient(180deg,#f0d28a,#c99f46);border:0;border-radius:999px;padding:12px 28px;
+  box-shadow:0 4px 18px rgba(227,192,112,.25);transition:transform .15s, box-shadow .15s, opacity .2s;
+}
+button:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(227,192,112,.4)}
+button:disabled{opacity:.4;cursor:default;transform:none}
+button.ghost{background:transparent;color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold-dim)}
+.hint{color:var(--muted);font-style:italic;min-height:1.4em;margin:18px 0 0}
+
+/* ---------- анекдот ---------- */
+#joke{
+  max-width:640px;margin:34px auto 0;padding:26px 28px;border-radius:14px;text-align:left;
+  background:rgba(255,255,255,.05);border:1px solid rgba(227,192,112,.3);
+  backdrop-filter:blur(6px);
+  opacity:0;transform:translateY(16px);transition:opacity .8s .2s, transform .8s .2s;
+}
+#joke.show{opacity:1;transform:none}
+#joke h2{margin:0 0 4px;font-weight:400;color:var(--gold);font-size:22px;letter-spacing:.06em}
+#joke .meaning:empty{display:none}
+#joke .meaning{margin:0 0 14px;color:var(--muted);font-style:italic;font-size:15px}
+#joke p.text{white-space:pre-line;margin:0;font-size:clamp(17px,2.8vw,20px);line-height:1.6}
+#dbwarn{color:#e59a9a;font-size:13px;margin-top:12px;display:none}
+
+/* ---------- история ---------- */
+#history{max-width:760px;margin:46px auto 0}
+#history h3{font-weight:400;color:var(--gold-dim);letter-spacing:.2em;text-transform:uppercase;font-size:13px;margin:0 0 12px}
+#hlist{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0;padding:0;list-style:none}
+#hlist li{padding:6px 14px;border-radius:999px;font-size:14px;border:1px solid rgba(227,192,112,.25);
+  background:rgba(255,255,255,.04);color:var(--ink)}
+#hlist li.tarot{cursor:pointer}
+#hlist li.tarot:hover{border-color:var(--gold);background:rgba(227,192,112,.12)}
+#hlist li.plain{color:var(--muted);font-style:italic}
+#hlist .rn{color:var(--gold-dim);margin-right:6px}
+footer{margin-top:40px;color:#6d6690;font-size:12px}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition-duration:.01s !important;animation:none !important}
+}
+</style>
+</head>
+<body>
+<div id="stars"></div>
+<main>
+  <h1>Таро Штирлица</h1>
+  <p class="sub">Вытяни карту — и Вселенная пришлёт тебе анекдот</p>
+  <p class="orn">✦ ✦ ✦</p>
+
+  <section id="table" class="stack" aria-label="Колода"></section>
+  <p class="hint" id="hint">Колода ждёт. Нажми «Перетасовать».</p>
+  <div class="btns">
+    <button id="btnShuffle">Перетасовать</button>
+    <button id="btnAgain" class="ghost" style="display:none">Вытянуть ещё</button>
+  </div>
+
+  <article id="joke" aria-live="polite">
+    <h2 id="jTitle"></h2>
+    <p class="meaning" id="jMeaning"></p>
+    <p class="text" id="jText"></p>
+    <div id="dbwarn">Не удалось сохранить расклад в базу — проверь, что MySQL запущен.</div>
+  </article>
+
+  <section id="history">
+    <h3>История раскладов</h3>
+    <ul id="hlist"></ul>
+  </section>
+  <footer>Любое совпадение с Мюллером случайно.</footer>
+</main>
+
+<script>
+const DECK = [
+ ["Шут", "✦", "", "23 февраля Штирлиц надел свою старую, любимую буденовку, взял в руки красное знамя и, распевая революционные песни, пошел к рейхсканцелярии. В этот день он как никогда был близок к провалу."],
+ ["Маг", "☿", "", "Штирлиц шёл по ночному Берлину и вдруг заметил, что за ним летит тень на метле.\n «Гарри Поттер», — подумал Штирлиц.\n «Сам ты Поттер», — подумала фрау Заурих, которой наконец-то выдали новую швабру в комендатуре."],
+ ["Верховная Жрица", "☾", "", "— Кто здесь ходит? Случайно не Штирлиц?\nГолос из темноты:\n— Вы же знаете, что если даже это я, то всё равно не скажу."],
+ ["Императрица", "♀", "", "Говорят, радистка Кэт выдала себя не когда рожала, а когда ей принесли счёт за услуги платного роддома — воскликнув «Них** себе!»"],
+ ["Император", "♂", "", "Мюллер вызывает Штирлица: «Завтра коммунистический субботник, явка обязательна». Штирлиц отвечает «Есть» и, решив, что провалился, пишет рапорт: «Я, штандартенфюрер фон Штирлиц, на самом деле советский разведчик». Мюллер звонит Шелленбергу: «Вальтер, посмотрите, что ваши люди придумывают, чтобы на субботник не ходить»."],
+ ["Иерофант", "♃", "", "Штирлиц шёл по лесу и вдруг услышал в кустах шипение. «Змея», — подумал он и выпустил всю обойму. Только через час вспомнил, что пастор Шлаг так и не научился свистеть."],
+ ["Влюблённые", "♊", "", "— Штирлиц спросил Кэт:\n — Вы любите фильмы про любовь?\n — Бесспорно! — ответила Кэт.\n — А я с порно, — признался Штирлиц."],
+ ["Колесница", "♋", "", "Штирлиц ехал на грузовике и упал. - Надо было сесть в кабину, - слишком поздно подумал он."],
+ ["Сила", "♌", "", "Штирлиц шёл по Берлину. Навстречу ему шла сила трения. «Физика», — подумал Штирлиц. «Разведчик», — подумала сила трения, замедляя его шаг."],
+ ["Отшельник", "♍", "", "Идет Штирлиц ночью по пустынной улице Берлина, один-одинешенек. Навстречу — тишина. Штирлиц думает: «Хорошо. Хоть с кем-то можно поговорить по душам»."],
+ ["Колесо Фортуны", "☸", "", "Штирлиц готовился к бою, а пришла герл"],
+ ["Справедливость", "♎", "", "- Послушайте, дружище, - смущенно молвил шеф гестапо. - Фюрер к празднику выделил премию для сотрудников Рейха, а мы никак не можем ее поделить. Демократичный Шелленберг считает, что надо поделить на всех поровну, скряга Геббельс говорит, что надо старшим офицерам дать больше, а младшим - меньше, старый гад Борман упрямо стоит на том, что премию надо делить только между верхушкой Рейха, а остальные обойдутся. Мы пришли к выводу, что надо поручить это дело вам. Вот ведомость, вот деньги. Вписывайте фамилию и напротив нее сумму... Говорят, вы в школе всегда имели пятерки по математике и сумеете разделить по справедливости.\n  - Любое число легче всего делится на единицу, - с важным видом заявил Штирлиц и вписал в ведомость одного Себя."],
+ ["Повешенный", "♏", "", "Штирлиц и Мюллер гуляли по Берлину и увидели женщин.\n \"Снимем?\" - предложил Штирлиц. \"Зачем? - ответил Мюллер. - Пусть висят\"."],
+ ["Смерть", "☠", "", "Плейшнер выбрасывался из окна пятый раз. Ампула с ядом во\n рту не разбивалась…"],
+ ["Умеренность", "♐", "", "Штирлиц вёл двойную жизнь и очень надеялся, что хоть одна из них сложится удачно."],
+ ["Дьявол", "♑", "", "Штирлиц моется в бане. Кричит банщику:\n — Добавьте-ка мне ещё пару!\n Банщик запустил двух проституток."],
+ ["Башня", "⚡", "", "Штирлицу попала в голову пуля. \"Разрывная,\" - раскинул мозгами Штирлиц."],
+ ["Звезда", "★", "", "Шагая по вечернему Берлину, Штирлиц мучительно размышлял, что в нём так привлекает внимание окружающих. То ли красная звезда на ушанке… то ли волочащийся за спиной парашют…"],
+ ["Луна", "☽", "", "Штирлиц всю ночь топил камин. Наутро камин все-таки утонул."],
+ ["Солнце", "☉", "", "Штирлиц отправил донесение в Центр открытым текстом. Через пять минут к нему ворвались эсэсовцы.\n— С первым апреля! — улыбнулся Штирлиц.\nЭсэсовцы понимающе заулыбались, а в Центре в это время хохотали до упаду."],
+ ["Суд", "♆", "", "Умер Штирлиц. Подходит к воротам рая, а апостол Пётр его не пускает: грехов много, и нацистам служил, и безбожникам-коммунистам. Штирлиц начинает спорить. Подходит архангел Михаил, узнаёт, в чём дело, и устало машет рукой:\n — Пропусти. Мы всё равно ничего не докажем."],
+ ["Мир", "✺", "", "Штирлиц получил секретное письмо. Прочитав, он сжёг его, плюнул на пол и высморкался в штору. В письме было написано: «Задание выполнено, можете расслабиться»."],
+ ["Туз Жезлов", "", "", "В прошлом году Штирлицу присвоили очередное воинское звание и дали папаху.\n Пах болит до сих пор…"],
+ ["Двойка Жезлов", "", "", "Штирлиц проснулся в тюремной камере, не помня, как туда попал. Решил: если войдёт гестаповец — крикну «Хайль Гитлер!» и скажу, что я штандартенфюрер СС; если советский солдат — «Я полковник Исаев». Вошёл милиционер: «Ну и нажрались вы вчера, товарищ Тихонов»."],
+ ["Тройка Жезлов", "", "", "Штирлиц долго смотрел вслед медленно удаляющемуся в сторону швейцарской границы пастору — тот еле передвигал ноги. «Бедняга явно никогда раньше не стоял на лыжах», — подумал он. Стоял июль 1944 года."],
+ ["Четвёрка Жезлов", "", "", "Штирлиц расхаживал по рейхсканцелярии с расстёгнутой ширинкой, из которой выглядывали красные трусы. Никто и не догадывался, что так он отмечает Первое мая."],
+ ["Пятёрка Жезлов", "", "", "Мюллер шёл по улице. Вдруг ему на голову упал кирпич.\n— Вот те раз, — подумал Мюллер.\n— Вот те два, — подумал Штирлиц и бросил второй кирпич."],
+ ["Шестёрка Жезлов", "", "", "Штирлиц шёл по Берлину и увидел на стене надпись «Штирлиц — дурак». Все вокруг смеялись, и только он один понял, что ему присвоено звание Героя Советского Союза."],
+ ["Семёрка Жезлов", "", "", "К даче Штирлица подъехала машина. Мюллер со взводом гестаповцев постучал в дверь.\n— Вам кого?\n— Штирлица.\n— А меня нет дома.\nМюллер выругался и уехал. Так Штирлиц уже третью неделю водил за нос гестапо."],
+ ["Восьмёрка Жезлов", "", "", "Штирлиц по электронной почте получил шифровку, после прочтения распечатал её и съел."],
+ ["Девятка Жезлов", "", "", "Штирлиц прогуливается по весеннему лесу, разглядывая почки на деревьях. \n - Опять Мюллер зверствует, - подумал Штирлиц"],
+ ["Десятка Жезлов", "", "", "Штирлиц знал, что сейчас заснёт за столом и проснётся ровно через 20 минут. В тот день он делал это уже в пятый раз."],
+ ["Паж Жезлов", "", "", "Штирлиц шёл вприпрыжку. В «Припрыжке» было вкусное пиво."],
+ ["Рыцарь Жезлов", "", "", "У Гитлера переговоры с Муссолини. Вдруг распахивается дверь, влетает Штирлиц, расталкивая всех, идёт к сейфу фюрера, достаёт отмычки и начинает рыться.\n— Это кто? — оторопел Муссолини.\n— Русский разведчик Исаев.\n— Так почему его не арестуют?\n— Бесполезно, всё равно выкрутится."],
+ ["Королева Жезлов", "", "", "В любой компании Штирлиц сразу же становился заводилой. Водила был его телохранителем."],
+ ["Король Жезлов", "", "", "Штирлиц постоянно напевал про МТС: «Не думай о секундах свысока…» В ответ на это МТС ввело новый тариф «Штирлиц» — первые 17 секунд бесплатно!"],
+ ["Туз Кубков", "", "", "Вот тебе и сон в руку, — сказал Штирлиц, вытирая руку об одеяло."],
+ ["Двойка Кубков", "", "", "Мюллер вызвал Штирлица:\n— Штирлиц, где мы с вами могли раньше встречаться?\n— Может быть, в Испании в 36-м?\n— Нет, Штирлиц, раньше.\n— Может быть, в Китае в двадцатых?\n— Нет, ещё раньше.\n— Не знаю.\n— Эх ты, Петька!..\n— Василий Иванович?!"],
+ ["Тройка Кубков", "", "", "Штирлиц знал, что запоминаются только последняя фраза и первый час корпоратива."],
+ ["Четвёрка Кубков", "", "", "Штирлиц поднял трубку и услышал томный голос радистки Кэт:\n — Вам, наверное, не спится без меня?\n — Почему же? Спиться я могу и без вас, — ответил Штирлиц и налил четвертый стакан водки."],
+ ["Пятёрка Кубков", "", "", "Каждый раз, увидев в небе журавлиный клин, Штирлиц тихо про себя матерился, вытягивался по стойке смирно и отдавал честь…"],
+ ["Шестёрка Кубков", "", "", "Штирлиц любил играть на гитаре. Правда, все машинки и любимый паровозик едва на ней помещались."],
+ ["Семёрка Кубков", "", "", "Штирлиц наслюнявил карандаш и вывел: «Здравствуй, Оксана!» Нет, не так — смял и съел. «Здравствуй, Юля!» — опять не то, съел. «Здравствуй, Ира!..» — да как же её звали? Съел и эту. «Ну вот, по крайней мере, теперь я сыт». — Рисковать не будем, — сказал он связному. — Передайте жене всё на словах…"],
+ ["Восьмёрка Кубков", "", "", "Да-а… Хорошо было полковнику Исаеву… Набрал кредитов в Дойчбанке на имя Штирлица и свалил…"],
+ ["Девятка Кубков", "", "", "Штирлиц почувствовал разницу. Ему понравилось. И он почувствовал её ещё раз."],
+ ["Десятка Кубков", "", "", "— Помните «Семнадцать мгновений весны»? Штирлиц свою жену не видел 16 лет! Он ей 16 лет верность хранил!\n— Это она так думала.\n— Он не мог её обманывать!!!\n— Весь Третий рейх мог, а её не мог?!"],
+ ["Паж Кубков", "", "", "В дверь Штирлица постучали. Открыв, он увидел на пороге маленькую собачонку.\n— Чего тебе, дуреха? — ласково спросил Штирлиц.\n— Сам дурак, я из Центра."],
+ ["Рыцарь Кубков", "", "", "Штирлиц провожает Кэт до подъезда. Кэт:\n— Давайте встретимся завтра, у роддома…\nШтирлиц поднял глаза и увидел в окне свет — урод действительно был дома."],
+ ["Королева Кубков", "", "", "Мюллер умел читать мысли Штирлица, но они были зашифрованы."],
+ ["Король Кубков", "", "", "— Поговаривают, дружище Штирлиц, что по вечерам после работы вы злоупотребляете водкой. Вы случайно не русский?\n— Давайте будем поделикатней друг к другу, Мюллер. Я же не обсуждаю ваше пристрастие к салу и галушкам."],
+ ["Туз Мечей", "", "", "Штирлиц долго смотрел в одну точку. Потом в другую.\n— Двоеточие, — наконец догадался Штирлиц."],
+ ["Двойка Мечей", "", "", "Штирлиц выстрелил в слепую. Слепая упала навзничь. Взничь грязно выругалась."],
+ ["Тройка Мечей", "", "", "Штирлиц был близок к провалу… Провал повязало гестапо, и он дал показания, что штандартенфюрер Штирлиц склонял его к близости."],
+ ["Четвёрка Мечей", "", "", "Штирлиц всегда спал как убитый. Его даже пару раз обводили мелом…"],
+ ["Пятёрка Мечей", "", "", "«В ногах правды нет», — вспомнил Штирлиц и стал бить противника кулаками."],
+ ["Шестёрка Мечей", "", "", "Штирлиц собрал все свои вещи и сел в судно. Но вдруг неожиданно судно перевернулось, и Штирлиц полетел на пол, хватаясь руками за стоящую рядом кровать. Больные в палате засмеялись в голос."],
+ ["Семёрка Мечей", "", "", "Штирлиц шёл в Дрезден с трудом разбирая дорогу.\n Наутро железная дорога от Берлина до Дрездена была полностью разобрана…"],
+ ["Восьмёрка Мечей", "", "", "Штирлиц толкнул дверь. Дверь не открылась. Толкнул сильнее — не поддалась. Разбежался и ударил плечом — всё без толку.\nГолос Копеляна за кадром: «Да на себя тяни, идиот!»"],
+ ["Девятка Мечей", "", "", "— Штирлиц, где вы так хорошо научились стрелять? — спросил Мюллер.\n— В ДОССААФе, — ответил Штирлиц и задумался: «Не сболтнул ли я чего-нибудь лишнего?»"],
+ ["Десятка Мечей", "", "", "Штирлиц рассказал неприличный анекдот и вогнал Мюллера в краску. \"Стеснительный какой,\" — подумал Штирлиц, наглухо закрывая бочку."],
+ ["Паж Мечей", "", "", "Мюллер выглянул из окна и увидел Штирлица.\n«Куда это он идёт?» — подумал Мюллер.\n«Не твоё собачье дело», — подумал Штирлиц."],
+ ["Рыцарь Мечей", "", "", "Мюллер с бешенной скоростью мчался в автомобиле. А рядом шел Штирлиц, делая вид, что он прогуливается."],
+ ["Королева Мечей", "", "", "Заметила, что в «Семнадцати мгновениях весны» у всех фашистов в досье написано «связей, порочащих его, не имеет», а у Штирлица — «в связях, порочащих его, замечен не был»."],
+ ["Король Мечей", "", "", "— Штирлиц, вы попались! — потирал руки Мюллер. — Вы отвертелись, когда мы нашли ваши пальчики на чемодане русской радистки. Вы выкрутились, когда мы нашли их на трубке телефона правительственной связи. Но теперь ваше удостоверение пахнет русской водкой!\n— Знаете, Мюллер, перед тем как поставить печать на моё удостоверение, Шелленберг на неё подышал."],
+ ["Туз Пентаклей", "", "", "Шёл Штирлиц по дороге, видит: участок огорожен, висит объявление «Продам дом», а дома на участке никакого нет. «Уже продали», — подумал Штирлиц."],
+ ["Двойка Пентаклей", "", "", "Штирлиц получал больше Мюллера, потому что работал по совместительству."],
+ ["Тройка Пентаклей", "", "", "У Штирлица вблизи рейхсканцелярии сломалась машина, он вышел и стал копаться в моторе.\n— Штирлиц, вы русский разведчик, — сказал проходивший мимо Мюллер.\n— Как вы догадались?\n— Истинный ариец непременно обратился бы в автосервис."],
+ ["Четвёрка Пентаклей", "", "", "Пошёл как-то Штирлиц в лес за грибами. Смотрит направо – грибов нет. Смотрит налево – грибов нет. Смотрит прямо – грибов нет.\"Видимо, не сезон\" - подумал Штирлиц и сел в сугроб."],
+ ["Пятёрка Пентаклей", "", "", "Штирлиц зашел в бар с криком:\n  - Порублю, суки!\n  Немцы скинулись по рублю, и Штирлиц ушел."],
+ ["Шестёрка Пентаклей", "", "", "Штирлиц кормил немецких детей украдкой. От украдки дети пухли и дохли."],
+ ["Семёрка Пентаклей", "", "", "Штирлиц уже три месяца слал в Центр одну и ту же шифровку — четыре номера банковских карт. Но тщетно: ни на одну из них не поступило ни копейки зарплаты."],
+ ["Восьмёрка Пентаклей", "", "", "Штирлиц подошёл к двери и тихонько открыл её. Свет зажёгся. Закрыл — потух. Открыл — зажёгся. Закрыл — потух. Открыл в третий раз — зажёгся.\n— Холодильник! — догадался Штирлиц."],
+ ["Девятка Пентаклей", "", "", "Когда на Берлин опускалась глубокая ночь, Штирлиц садился в свой Гелендваген и гонял по пустынным улицам. Эту привычку он приобрёл в Москве, в разведшколе, и уже много лет не мог от неё избавиться."],
+ ["Десятка Пентаклей", "", "", "Штирлицу сообщили, что у него в России родился сын. Скупая мужская слеза скатилась из его глаза. Штирлиц уже 7 лет не был на Родине."],
+ ["Паж Пентаклей", "", "", "«Строго секретно! Лично в руки! Рейхсфюреру СС Генриху Гиммлеру! Рейхсфюрер!..»\nШтирлиц отложил ручку и задумался: «А может, всё-таки написать по-немецки?»"],
+ ["Рыцарь Пентаклей", "", "", "Штирлиц спал, обхватив руками руль. Он знал, что проснётся ровно через 30 минут — как раз в то время, когда машина будет подъезжать к границе."],
+ ["Королева Пентаклей", "", "", "Вязание успокаивало Штирлица. После окончания вязания у камина остался лежать связанный Мюллер."],
+ ["Король Пентаклей", "", "", "К концу войны положение Германии было столь плачевно, что даже в рейхсканцелярии приходилось стоять в очереди за колбасой. Однако Штирлиц всегда брал без очереди. Гестаповцы возмущались, не зная, что Герои Советского Союза обслуживаются вне очереди."],
+];
+const ROMAN = n => { if(n===0) return "0"; const m=[[10,"X"],[9,"IX"],[5,"V"],[4,"IV"],[1,"I"]]; let r=""; for(const [v,s] of m){ while(n>=v){r+=s;n-=v} } return r; };
+
+/* Формат записи в DECK: ["Название", "символ", "смысл", "анекдот", "метка (необязательно)"]
+   Символ можно оставить пустым "" — для минорных арканов он подставится по масти.
+   Первые 22 карты считаются старшими арканами (метка — римская цифра). */
+const SUITS = [["жезл","⚜"],["кубк","♥"],["меч","⚔"],["пентакл","✦"],["монет","✦"]];
+function info(i){
+  const [name, sym, meaning, joke, lab] = DECK[i];
+  let s = sym;
+  if(!s){ const low=name.toLowerCase(); const f=SUITS.find(x=>low.includes(x[0])); s = f?f[1]:"✦"; }
+  const label = lab!==undefined ? lab : (i<22 ? ROMAN(i) : "");
+  return {name, sym:s, meaning, joke, label};
+}
+const titleOf = c => c.label ? `${c.label} · ${c.name}` : c.name;
+const $ = id => document.getElementById(id);
+const table = $("table"), hint = $("hint");
+const btnShuffle = $("btnShuffle"), btnAgain = $("btnAgain");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let cards = [], state = "stack"; // stack | shuffling | fan | picked
+
+/* звёзды */
+(function(){
+  const box = $("stars");
+  for(let i=0;i<70;i++){
+    const s=document.createElement("i");
+    s.style.left=Math.random()*100+"%"; s.style.top=Math.random()*100+"%";
+    s.style.animationDelay=(Math.random()*4)+"s";
+    s.style.transform="scale("+(0.6+Math.random()*1.2)+")";
+    box.appendChild(s);
+  }
+})();
+
+/* честное перемешивание */
+function rnd(n){ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]%n; }
+function shuffled(){ const idx=DECK.map((_,i)=>i); for(let i=idx.length-1;i>0;i--){const j=rnd(i+1);[idx[i],idx[j]]=[idx[j],idx[i]];} return idx; }
+
+function cardEl(deckIdx){
+  const c = info(deckIdx);
+  const el = document.createElement("div");
+  el.className="card"; el.dataset.idx=deckIdx;
+  el.innerHTML = `<div class="inner"><div class="back"></div><div class="face">
+    <div class="num"></div><div class="sym"></div><div class="name"></div></div></div>`;
+  el.querySelector(".num").textContent = c.label || "\u00a0";   // textContent — без XSS
+  el.querySelector(".sym").textContent = c.sym;
+  el.querySelector(".name").textContent = c.name;
+  return el;
+}
+function place(el,x,y,a,z){
+  el.style.setProperty("--x",x+"px"); el.style.setProperty("--y",y+"px");
+  el.style.setProperty("--a",a+"deg"); el.style.zIndex=z;
+}
+
+function build(){
+  table.innerHTML=""; cards=[];
+  for(const i of shuffled()){ const el=cardEl(i); table.appendChild(el); cards.push(el); }
+  layoutStack();
+}
+function layoutStack(){
+  const k = Math.min(.35, 24/cards.length/1.0);
+  cards.forEach((el,i)=>place(el,-i*k,-i*k,0,i));
+  table.className="stack"; table.style.setProperty("--rows",1);
+}
+function layoutFan(){
+  const ch = cards[0].offsetHeight, cw = cards[0].offsetWidth;
+  const R = ch*1.7, W = table.clientWidth;
+  const maxSpread = 2*Math.asin(Math.min(1,(W-cw*1.1-ch*0.6)/(2*R)))*180/Math.PI;
+  const spread = Math.min(110, maxSpread);
+  /* сколько карт помещается в ряд так, чтобы полоска каждой была хотя бы ~9px */
+  const perArc = (spread*Math.PI/180)*R;
+  const maxPerRow = Math.max(12, Math.floor(perArc/9));
+  const rows = Math.ceil(cards.length/maxPerRow);
+  const per = Math.ceil(cards.length/rows);
+  table.style.setProperty("--rows", rows);
+  cards.forEach((el,i)=>{
+    const row = Math.floor(i/per), j = i%per, m = Math.min(per, cards.length-row*per);
+    const t = m===1?0:(j/(m-1)-.5);
+    const a = t*spread, rad=a*Math.PI/180;
+    place(el, R*Math.sin(rad), R*(1-Math.cos(rad)) + row*ch*.42, a, row*100+j+1);
   });
-  e.target.reset();
-  load();
+  table.className="fan";
+}
+
+async function shuffleAnim(){
+  state="shuffling"; table.className="shuffling";
+  btnShuffle.disabled=true; btnAgain.style.display="none";
+  hint.textContent="Колода мешается…";
+  const rounds = reduce?0:3;
+  for(let r=0;r<rounds;r++){
+    cards.forEach((el,i)=>{
+      const side = (i%2?1:-1)*(60+Math.random()*60);
+      place(el, side, -Math.random()*20, (Math.random()-.5)*14, i);
+    });
+    await sleep(380);
+    cards.forEach((el,i)=>place(el,-i*.2,-i*.2,0,rnd(cards.length)));
+    await sleep(380);
+  }
+  build(); await sleep(60);
+  layoutFan();
+  state="fan";
+  hint.textContent="Выбери карту. Доверься Центру.";
+  btnShuffle.disabled=false; btnShuffle.textContent="Перетасовать заново";
+}
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* выбор карты */
+table.addEventListener("click", e=>{
+  const el = e.target.closest(".card");
+  if(!el || state!=="fan") return;
+  pick(el);
+});
+
+async function pick(el){
+  state="picked"; btnShuffle.disabled=true;
+  cards.forEach((c,i)=>{ if(c!==el){ c.style.transitionDelay=(i*12)+"ms"; c.classList.add("gone"); }});
+  el.classList.add("picked");
+  const idx = +el.dataset.idx, c = info(idx);
+  hint.textContent="";
+  await sleep(reduce?50:1100);
+  table.style.setProperty("--rows",1);
+  $("jTitle").textContent = titleOf(c);
+  $("jMeaning").textContent = c.meaning;
+  $("jText").textContent = c.joke;
+  $("joke").classList.add("show");
+  $("joke").scrollIntoView({behavior:reduce?"auto":"smooth", block:"nearest"});
+  btnAgain.style.display=""; btnShuffle.style.display="none";
+  save(idx, c.name);
+}
+
+btnShuffle.onclick = ()=>{
+  if(state==="picked") return;
+  if(state==="stack"||state==="fan"){ if(state==="fan"){ build(); } shuffleAnim(); }
 };
-load();
+btnAgain.onclick = ()=>{
+  $("joke").classList.remove("show"); $("dbwarn").style.display="none";
+  btnShuffle.style.display=""; btnShuffle.disabled=false;
+  btnAgain.style.display="none";
+  build(); state="stack";
+  window.scrollTo({top:0,behavior:reduce?"auto":"smooth"});
+  setTimeout(shuffleAnim, 250);
+};
+
+/* ---------- база: заметки = расклады ---------- */
+const TAG = "tarot|";
+async function save(idx, name){
+  try{
+    const r = await fetch("/api/notes",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text:`${TAG}${idx}|${name}`})});
+    if(!r.ok) throw new Error(r.status);
+    loadHistory();
+  }catch(err){ $("dbwarn").style.display="block"; }
+}
+async function loadHistory(){
+  const ul = $("hlist");
+  try{
+    const r = await fetch("/api/notes"); if(!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    const notes = (data.notes || data).reverse();
+    ul.replaceChildren(...notes.slice(0,24).map(n=>{
+      const li=document.createElement("li");
+      if(n.text.startsWith(TAG)){
+        const [, , ...rest] = n.text.split("|"); const name = rest.join("|");
+        li.className="tarot";
+        const k = DECK.findIndex(d=>d[0]===name);
+        if(k>=0){ const lab=info(k).label; if(lab){ const rn=document.createElement("span"); rn.className="rn"; rn.textContent=lab; li.append(rn); } }
+        li.append(document.createTextNode(name));  // textContent — без XSS
+        if(k>=0){ li.title="Показать анекдот"; li.onclick=()=>showOld(k); }
+      }else{ li.className="plain"; li.textContent=n.text; }
+      return li;
+    }));
+    if(!notes.length){ ul.innerHTML=""; const li=document.createElement("li"); li.className="plain"; li.textContent="Пока пусто — вытяни первую карту"; ul.append(li); }
+  }catch(err){
+    const li=document.createElement("li"); li.className="plain"; li.textContent="История недоступна (нет связи с базой)"; ul.replaceChildren(li);
+  }
+}
+function showOld(idx){
+  if(idx<0||!DECK[idx]) return;
+  const c=info(idx);
+  $("jTitle").textContent=titleOf(c); $("jMeaning").textContent=c.meaning; $("jText").textContent=c.joke;
+  $("joke").classList.add("show");
+  $("joke").scrollIntoView({behavior:reduce?"auto":"smooth", block:"center"});
+}
+
+addEventListener("resize", ()=>{ if(state==="fan") layoutFan(); });
+build(); loadHistory();
 </script>
 </body>
 </html>

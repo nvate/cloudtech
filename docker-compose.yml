@@ -6,10 +6,38 @@ services:
       MYSQL_DATABASE: lab0
       MYSQL_USER: app
       MYSQL_PASSWORD: app
-    ports:
-      - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
+    networks:
+      - backend_net
+
+  backend-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PORT=5000
+      - DB_HOST=db
+      - INSTANCE_NAME=backend-1
+    depends_on:
+      - db
+    networks:
+      - frontend_net
+      - backend_net
+
+  backend-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PORT=5000
+      - DB_HOST=db
+      - INSTANCE_NAME=backend-2
+    depends_on:
+      - db
+    networks:
+      - frontend_net
+      - backend_net
 
   nginx:
     image: nginx:alpine
@@ -23,8 +51,15 @@ services:
       - ./static:/usr/share/nginx/html:ro
       - ./docs:/var/www/docs:ro
       - ./site-b:/var/www/site-b:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      - backend-1
+      - backend-2
+    networks:
+      - frontend_net
 
 volumes:
-  mysql_data:
+  db_data:
+
+networks:
+  frontend_net:
+  backend_net:

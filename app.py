@@ -1,15 +1,17 @@
+import os
 import time
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import OperationalError
-import os
-
-PORT = int(os.environ.get('PORT', 5000))
-INSTANCE_ID = f"backend-{PORT}"
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://app:app@localhost:3306/lab0'
+
+DB_HOST = os.environ.get('DB_HOST', 'localhost')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://app:app@{DB_HOST}:3306/lab0'
 db = SQLAlchemy(app)
+
+PORT = int(os.environ.get('PORT', 5000))
+INSTANCE_ID = os.environ.get('INSTANCE_NAME', f"backend-{PORT}")
 
 class Note(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -37,3 +39,7 @@ if __name__ == '__main__':
         except OperationalError:
             time.sleep(1)
     app.run(host='0.0.0.0', port=PORT, debug=True)
+
+
+# cache test 1
+# cache test 2

@@ -1,0 +1,15 @@
+.venv
+venv
+__pycache__
+*.pyc
+.git
+.gitignore
+.idea
+.vscode
+check_output.txt
+README.md
+nginx/ssl
+nginx/htpasswd
+docs
+site-b
+static
